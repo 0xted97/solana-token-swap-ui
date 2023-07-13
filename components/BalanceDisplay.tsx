@@ -36,7 +36,7 @@ export const BalanceDisplay: FC = () => {
 
   const getBalance = async () => {
     connection.getAccountInfo(publicKey).then((info) => {
-      setBalance(info.lamports / LAMPORTS_PER_SOL);
+      setBalance((info?.lamports || 0) / LAMPORTS_PER_SOL);
     });
   };
 

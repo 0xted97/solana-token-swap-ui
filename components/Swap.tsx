@@ -1,4 +1,8 @@
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import {
+  useAnchorWallet,
+  useConnection,
+  useWallet,
+} from "@solana/wallet-adapter-react";
 import * as web3 from "@solana/web3.js";
 import { FC, useEffect, useState } from "react";
 import { AnchorProvider, BN, Idl, Program } from "@project-serum/anchor";
@@ -20,12 +24,15 @@ import {
   B_MINT,
   POOL_MINT,
   SWAP_AUTHORITY,
+  SWAP_PROGRAM_ID,
 } from "../configs";
 import { getOrCreateAccount, getPoolAccounts } from "../configs/utils";
 import {
   TOKEN_PROGRAM_ID,
   getMint,
   createApproveInstruction,
+  createCloseAccountInstruction,
+  createSyncNativeInstruction,
 } from "@solana/spl-token";
 
 const { Option } = Select;
@@ -36,14 +43,21 @@ type Props = {
 
 export const Swap: FC<Props> = (props) => {
   const [txSig, setTxSig] = useState("");
+  const [txInitial, setTxInitial] = useState("");
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
-  const userTransferAuthority = web3.Keypair.generate();
+  const userTransferAuthority = web3.Keypair.fromSecretKey(
+    new Uint8Array([
+      140, 156, 18, 111, 11, 53, 77, 214, 83, 206, 110, 55, 223, 17, 100, 14,
+      47, 216, 181, 141, 30, 173, 200, 8, 184, 158, 22, 217, 128, 99, 223, 150,
+      6, 211, 207, 154, 3, 162, 205, 53, 197, 55, 11, 252, 140, 232, 238, 46,
+      183, 251, 206, 253, 189, 22, 33, 144, 146, 140, 176, 5, 185, 196, 243,
+      149,
+    ])
+  );
 
-  const link = () => {
-    return txSig
-      ? `https://explorer.solana.com/tx/${txSig}?cluster=devnet`
-      : "";
+  const link = (hash: string) => {
+    return `https://solscan.io/tx/${hash}?cluster=devnet`;
   };
 
   useEffect(() => {}, []);
@@ -60,7 +74,7 @@ export const Swap: FC<Props> = (props) => {
 
   const onFinish = async (values: any) => {
     try {
-      const programId = new web3.PublicKey(AMM_ACCOUNT);
+      const programId = new web3.PublicKey(SWAP_PROGRAM_ID);
       const program = new Program(IDL as Idl, programId, props?.provider);
 
       const { swapTo } = values;
@@ -83,8 +97,18 @@ export const Swap: FC<Props> = (props) => {
         if (userBAccounts[1]) transaction.add(userBAccounts[1]);
 
         const mint = await getMint(connection, B_MINT);
-        console.log("🚀 ~ file: Swap.tsx:86 ~ onFinish ~ mint:", mint)
         const amount = Number(values.amount) * 10 ** mint.decimals;
+
+        // Wrap SOL -> WSOL
+        transaction.add(
+          web3.SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: userBAccounts[0],
+            lamports: amount,
+          }),
+          createSyncNativeInstruction(userBAccounts[0])
+        );
+
         // Approve amount for userTransferAuthority
         const approveIx = createApproveInstruction(
           userBAccounts[0],
@@ -93,6 +117,11 @@ export const Swap: FC<Props> = (props) => {
           amount
         );
         transaction.add(approveIx);
+
+        const initial = await sendTransaction(transaction, connection, {
+          preflightCommitment: "finalized",
+        });
+        setTxInitial(initial);
 
         const swapTx = await program.methods
           .swap(new BN(amount), new BN(0))
@@ -109,15 +138,9 @@ export const Swap: FC<Props> = (props) => {
             tokenProgram: TOKEN_PROGRAM_ID,
             hostFeeAccount: web3.PublicKey.default,
           })
-          .instruction();
-        transaction.sign({
-          publicKey: userTransferAuthority.publicKey,
-          secretKey: userTransferAuthority.secretKey,
-        });
-
-        transaction.add(swapTx);
-        const tran = await sendTransaction(transaction, connection);
-        console.log("🚀 ~ file: Swap.tsx:115 ~ onFinish ~ tran:", tran);
+          .signers([userTransferAuthority])
+          .rpc();
+        setTxSig(swapTx);
       }
       if (swapTo === "sol") {
         const transaction = new web3.Transaction();
@@ -145,14 +168,20 @@ export const Swap: FC<Props> = (props) => {
           userAAccounts[0],
           userTransferAuthority.publicKey, // delegate
           publicKey,
-          amount // amount, if your decimals is 8, 10^8 for 1 token
+          amount
         );
         transaction.add(approveIx);
+
+        const initial = await sendTransaction(transaction, connection, {
+          preflightCommitment: "finalized",
+        });
+        setTxInitial(initial);
+
         const swapTx = await program.methods
           .swap(new BN(amount), new BN(0))
           .accounts({
-            swapAuthority: SWAP_AUTHORITY,
             amm: AMM_ACCOUNT,
+            swapAuthority: SWAP_AUTHORITY,
             userTransferAuthority: userTransferAuthority.publicKey,
             sourceInfo: userAAccounts[0],
             destinationInfo: userBAccounts[0],
@@ -163,15 +192,16 @@ export const Swap: FC<Props> = (props) => {
             tokenProgram: TOKEN_PROGRAM_ID,
             hostFeeAccount: web3.PublicKey.default,
           })
-          .instruction();
-        transaction.sign({
-          publicKey: userTransferAuthority.publicKey,
-          secretKey: userTransferAuthority.secretKey,
-        });
-
-        transaction.add(swapTx);
-        const tran = await sendTransaction(transaction, connection);
-        console.log("🚀 ~ file: Swap.tsx:115 ~ onFinish ~ tran:", tran);
+          .signers([userTransferAuthority])
+          .postInstructions([
+            createCloseAccountInstruction(
+              userBAccounts[0],
+              publicKey,
+              publicKey
+            ),
+          ])
+          .rpc();
+        setTxSig(swapTx);
       }
     } catch (error) {
       notification.error({
@@ -198,6 +228,7 @@ export const Swap: FC<Props> = (props) => {
             label="Amount"
             name="amount"
             rules={[{ required: true, message: "Please input your amount!" }]}
+            initialValue={"0.0002"}
           >
             <InputNumber
               style={{ width: "100%" }}
@@ -223,6 +254,10 @@ export const Swap: FC<Props> = (props) => {
             </Button>
           </Form.Item>
         </ContainerForm>
+      </Col>
+      <Col offset={4} span={12}>
+        <Button type="link" href={link(txInitial)} target="_blank">{txInitial}</Button>
+        <Button type="link" href={link(txSig)} target="_blank">{txSig}</Button>
       </Col>
     </Row>
   );
