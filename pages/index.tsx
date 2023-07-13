@@ -7,20 +7,32 @@ import { Swap } from "../components/Swap";
 import Head from "next/head";
 import { Col, Row, Tabs, Typography } from "antd";
 import type { TabsProps } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useAnchorWallet,
   useConnection,
   useWallet,
 } from "@solana/wallet-adapter-react";
-import { AnchorProvider, setProvider } from "@project-serum/anchor";
+import {
+  AnchorProvider,
+  Idl,
+  Program,
+  setProvider,
+  web3,
+} from "@project-serum/anchor";
+import { AMM_ACCOUNT, A_MINT, B_MINT, SWAP_PROGRAM_ID } from "../configs";
+import IDL from "../configs/solana_swap.json";
+import { getAccount, getMint } from "@solana/spl-token";
 
 const Home: NextPage = (props) => {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const wallet = useAnchorWallet();
   const provider = new AnchorProvider(connection, wallet, {});
-  setProvider(provider)
+
+  const [liquidA, setLiquidA] = useState(0);
+  const [liquidB, setLiquidB] = useState(0);
+  setProvider(provider);
 
   const items: TabsProps["items"] = [
     {
@@ -39,7 +51,31 @@ const Home: NextPage = (props) => {
   const onChangeTab = (key: string) => {
     setTab(key);
   };
-  
+
+  useEffect(() => {
+    getPoolAmount();
+  }, []);
+
+  const getPoolAmount = async () => {
+    try {
+      const programId = new web3.PublicKey(SWAP_PROGRAM_ID);
+      const program = new Program(IDL as Idl, programId, provider);
+      const ammInfo = await program.account.amm.fetch(AMM_ACCOUNT);
+      const [aMint, bMint, swapTokenA, swapTokenB] = await Promise.all([
+        getMint(connection, A_MINT),
+        getMint(connection, B_MINT),
+        getAccount(connection, new web3.PublicKey(ammInfo.tokenAAccount)),
+        getAccount(connection, new web3.PublicKey(ammInfo.tokenBAccount)),
+      ]);
+      const liquidA = Number(swapTokenA.amount) / 10 ** aMint.decimals;
+      const liquidB = Number(swapTokenB.amount) / 10 ** bMint.decimals;
+      setLiquidA(liquidA);
+      setLiquidB(liquidB);
+    } catch (error) {
+      setLiquidA(0);
+      setLiquidB(0);
+    }
+  };
 
   return (
     <div className={styles.App}>
@@ -52,6 +88,8 @@ const Home: NextPage = (props) => {
         <Row gutter={16}>
           <Col span={24} className={styles.AppBody}>
             <BalanceDisplay />
+            <h4>Liquid Move: {liquidA}</h4>
+            <h4>Liquid SOL: {liquidB}</h4>
           </Col>
           <Col span={24}>
             <Tabs

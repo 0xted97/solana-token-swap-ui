@@ -22,10 +22,6 @@ export const BalanceDisplay: FC = () => {
   const getBalanceToken = async () => {
     try {
       const account = getAssociatedTokenAddressSync(MOVE_MINT, publicKey);
-      console.log(
-        "🚀 ~ file: BalanceDisplay.tsx:24 ~ getBalanceToken ~ account:",
-        account.toString()
-      );
       const mint = await getMint(connection, MOVE_MINT);
       const { amount } = await getAccount(connection, account);
       setTokenBalance(Number(amount) / 10 ** mint.decimals);

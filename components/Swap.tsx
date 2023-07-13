@@ -33,6 +33,7 @@ import {
   createApproveInstruction,
   createCloseAccountInstruction,
   createSyncNativeInstruction,
+  getAccount,
 } from "@solana/spl-token";
 
 const { Option } = Select;
@@ -60,16 +61,20 @@ export const Swap: FC<Props> = (props) => {
     return `https://solscan.io/tx/${hash}?cluster=devnet`;
   };
 
-  useEffect(() => {}, []);
+  
 
-  const getPoolAmount = () => {};
-
-  const swap = () => {
-    event.preventDefault();
-    if (!connection || !publicKey) {
-      return;
-    }
-    const transaction = new web3.Transaction();
+  const getPoolAmount = async () => {
+    const programId = new web3.PublicKey(SWAP_PROGRAM_ID);
+    const program = new Program(IDL as Idl, programId, props?.provider);
+    const ammInfo = await program.account.amm.fetch(AMM_ACCOUNT);
+    const [aMint, bMint, swapTokenA, swapTokenB] = await Promise.all([
+      getMint(connection, A_MINT),
+      getMint(connection, B_MINT),
+      getAccount(connection, new web3.PublicKey(ammInfo.tokenAAccount)),
+      getAccount(connection, new web3.PublicKey(ammInfo.tokenBAccount)),
+    ]);
+    const liquidA = Number(swapTokenA.amount) / (10 ** aMint.decimals);
+    const liquidB = Number(swapTokenB.amount) / (10 ** bMint.decimals);
   };
 
   const onFinish = async (values: any) => {
@@ -256,8 +261,12 @@ export const Swap: FC<Props> = (props) => {
         </ContainerForm>
       </Col>
       <Col offset={4} span={12}>
-        <Button type="link" href={link(txInitial)} target="_blank">{txInitial}</Button>
-        <Button type="link" href={link(txSig)} target="_blank">{txSig}</Button>
+        <Button type="link" href={link(txInitial)} target="_blank">
+          {txInitial}
+        </Button>
+        <Button type="link" href={link(txSig)} target="_blank">
+          {txSig}
+        </Button>
       </Col>
     </Row>
   );
