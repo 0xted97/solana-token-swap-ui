@@ -1,51 +1,168 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import * as web3 from "@solana/web3.js";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { FC, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import styles from "../styles/Home.module.css";
-import { Button, Col, Form, Input, InputNumber, Row } from "antd";
+import { Button, Col, Form, Input, InputNumber, Row, notification } from "antd";
 import styled from "styled-components";
-import { AnchorProvider } from "@project-serum/anchor";
+import { AnchorProvider, BN, Idl, Program } from "@project-serum/anchor";
+import { getOrCreateAccount, getPoolAccounts } from "../configs/utils";
+import {
+  AMM_ACCOUNT,
+  A_MINT,
+  B_MINT,
+  POOL_MINT,
+  SWAP_AUTHORITY,
+  SWAP_PROGRAM_ID,
+  userTransferAuthority,
+} from "../configs";
+import IDL from "../configs/solana_swap.json";
+import {
+  TOKEN_PROGRAM_ID,
+  createApproveInstruction,
+  createSyncNativeInstruction,
+  getAccount,
+  getMint,
+} from "@solana/spl-token";
 
 type Props = {
   provider: AnchorProvider;
-}
-export const ProvideLiquidity: FC<Props> = () => {
+};
+export const ProvideLiquidity: FC<Props> = (props) => {
   const [txSig, setTxSig] = useState("");
+  const [txInitial, setTxInitial] = useState("");
+  const [poolTokenAmount, setPoolTokenAmount] = useState(0);
+
+  const [moveEst, setMoveEst] = useState(0);
+  const [solEst, setSolEst] = useState(0);
+  const [form] = Form.useForm();
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
-  const link = () => {
-    return txSig
-      ? `https://explorer.solana.com/tx/${txSig}?cluster=devnet`
-      : "";
+
+  const link = (hash: string) => {
+    return `https://solscan.io/tx/${hash}?cluster=devnet`;
   };
 
-  const sendSol = (event) => {
-    event.preventDefault();
-    if (!connection || !publicKey) {
-      return;
+  const calculateAmountB = async (aAmount: number) => {
+    console.log(
+      "🚀 ~ file: ProvideLiquidity.tsx:48 ~ calculateAmountB ~ aAmount:",
+      aAmount
+    );
+    const poolAccounts = await getPoolAccounts();
+    const [poolMint, aMint, bMint, poolAmountA, poolAmountB] =
+      await Promise.all([
+        getMint(connection, POOL_MINT),
+        getMint(connection, A_MINT),
+        getMint(connection, B_MINT),
+        getAccount(
+          connection,
+          new web3.PublicKey(poolAccounts.tokenAAccountAddress)
+        ),
+        getAccount(
+          connection,
+          new web3.PublicKey(poolAccounts.tokenBAccountAddress)
+        ),
+      ]);
+    const liquidAInNumber = Number(poolAmountA.amount) / 10 ** aMint.decimals;
+    const liquidBInNumber = Number(poolAmountB.amount) / 10 ** bMint.decimals;
+    const supplyInNumber = Number(poolMint.supply) / 10 ** poolMint.decimals;
+    const moveInNumber = Number(aAmount);
+    const poolAmount = (moveInNumber * supplyInNumber) / liquidAInNumber;
+
+    const solAmount = (liquidBInNumber * poolAmount) / supplyInNumber;
+
+    form.setFieldValue("sol", solAmount);
+    setSolEst(solAmount);
+    setPoolTokenAmount(poolAmount);
+  };
+
+  const onFinish = async (values: any) => {
+    const programId = new web3.PublicKey(SWAP_PROGRAM_ID);
+    const program = new Program(IDL as Idl, programId, props?.provider);
+    const poolAccounts = await getPoolAccounts();
+
+    try {
+      const transaction = new web3.Transaction();
+
+      const userAAccounts = await getOrCreateAccount(
+        connection,
+        A_MINT,
+        publicKey,
+        publicKey
+      );
+      if (userAAccounts[1]) transaction.add(userAAccounts[1]);
+      const userBAccounts = await getOrCreateAccount(
+        connection,
+        B_MINT,
+        publicKey,
+        publicKey
+      );
+      if (userBAccounts[1]) transaction.add(userBAccounts[1]);
+      const aMint = await getMint(connection, A_MINT);
+      const bMint = await getMint(connection, B_MINT);
+      const poolMint = await getMint(connection, POOL_MINT);
+
+      const poolAmount = Number(poolTokenAmount);
+      const moveAmount = Number(moveEst.toFixed(3));
+      const solAmount = Number(solEst.toFixed(3));
+      // Transfer Sol
+      transaction.add(
+        web3.SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: userBAccounts[0],
+          lamports: solAmount * 1e5,
+        }),
+        createSyncNativeInstruction(userBAccounts[0])
+      );
+
+      // Approve amount for userTransferAuthority
+      transaction.add(
+        createApproveInstruction(
+          userAAccounts[0],
+          userTransferAuthority.publicKey,
+          publicKey,
+          moveAmount
+        ),
+        createApproveInstruction(
+          userBAccounts[0],
+          userTransferAuthority.publicKey,
+          publicKey,
+          solAmount * 1e5
+        )
+      );
+
+      const initial = await sendTransaction(transaction, connection, {
+        preflightCommitment: "finalized",
+      });
+      setTxInitial(initial);
+
+      const depositTx = await program.methods
+        .depositAllTokenTypes(
+          new BN(poolAmount),
+          new BN(moveEst),
+          new BN(solEst * 1e5)
+        )
+        .accounts({
+          amm: AMM_ACCOUNT,
+          swapAuthority: SWAP_AUTHORITY,
+          userTransferAuthorityInfo: userTransferAuthority.publicKey,
+          sourceAInfo: userAAccounts[0],
+          sourceBInfo: userBAccounts[0],
+          tokenAAccount: poolAccounts.tokenAAccountAddress,
+          tokenBAccount: poolAccounts.tokenBAccountAddress,
+          poolMint: POOL_MINT,
+          destination: poolAccounts.tokenFeeAccountAddress,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([userTransferAuthority])
+        .rpc();
+      setTxSig(depositTx);
+    } catch (error) {
+      notification.error({
+        message: "Error",
+        description: error?.message || "Unknown error",
+      });
     }
-    const transaction = new web3.Transaction();
-    const recipientPubKey = new web3.PublicKey(event.target.recipient.value);
-
-    const sendSolInstruction = web3.SystemProgram.transfer({
-      fromPubkey: publicKey,
-      toPubkey: recipientPubKey,
-      lamports: LAMPORTS_PER_SOL * event.target.amount.value,
-    });
-
-    transaction.add(sendSolInstruction);
-    sendTransaction(transaction, connection).then((sig) => {
-      setTxSig(sig);
-    });
-  };
-
-  const onFinish = (values: any) => {
-    console.log("Success:", values);
-  };
-
-  const onFinishFailed = (errorInfo: any) => {
-    console.log("Failed:", errorInfo);
   };
 
   return (
@@ -59,37 +176,48 @@ export const ProvideLiquidity: FC<Props> = () => {
           name="basic"
           style={{ maxWidth: 600 }}
           onFinish={onFinish}
-          onFinishFailed={onFinishFailed}
           autoComplete="off"
         >
           <Form.Item
             label="Amount Move"
-            name="move"
             rules={[{ required: true, message: "Please input amount Move!" }]}
           >
             <InputNumber
+              name="move"
               style={{ width: "100%" }}
               placeholder="Please input amount Move"
+              onChange={(value) => {
+                calculateAmountB(Number(value));
+              }}
             />
           </Form.Item>
 
           <Form.Item
             label="Amount SOL"
-            name="sol"
             rules={[{ required: true, message: "Please input your amount!" }]}
           >
             <InputNumber
-              style={{ width: "100%" }}
+              name="sol"
+              style={{ width: "100%", color: "#FFF" }}
               placeholder="Please input amount SOL"
+              value={solEst}
+              disabled
             />
           </Form.Item>
-
           <Form.Item>
             <Button type="primary" htmlType="submit">
               Add Liquid
             </Button>
           </Form.Item>
         </ContainerForm>
+      </Col>
+      <Col offset={4} span={12}>
+        <Button type="link" href={link(txInitial)} target="_blank">
+          {txInitial}
+        </Button>
+        <Button type="link" href={link(txSig)} target="_blank">
+          {txSig}
+        </Button>
       </Col>
     </Row>
   );

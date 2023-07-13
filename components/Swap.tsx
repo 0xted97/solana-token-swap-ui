@@ -25,6 +25,7 @@ import {
   POOL_MINT,
   SWAP_AUTHORITY,
   SWAP_PROGRAM_ID,
+  userTransferAuthority,
 } from "../configs";
 import { getOrCreateAccount, getPoolAccounts } from "../configs/utils";
 import {
@@ -47,35 +48,11 @@ export const Swap: FC<Props> = (props) => {
   const [txInitial, setTxInitial] = useState("");
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
-  const userTransferAuthority = web3.Keypair.fromSecretKey(
-    new Uint8Array([
-      140, 156, 18, 111, 11, 53, 77, 214, 83, 206, 110, 55, 223, 17, 100, 14,
-      47, 216, 181, 141, 30, 173, 200, 8, 184, 158, 22, 217, 128, 99, 223, 150,
-      6, 211, 207, 154, 3, 162, 205, 53, 197, 55, 11, 252, 140, 232, 238, 46,
-      183, 251, 206, 253, 189, 22, 33, 144, 146, 140, 176, 5, 185, 196, 243,
-      149,
-    ])
-  );
 
   const link = (hash: string) => {
     return `https://solscan.io/tx/${hash}?cluster=devnet`;
   };
 
-  
-
-  const getPoolAmount = async () => {
-    const programId = new web3.PublicKey(SWAP_PROGRAM_ID);
-    const program = new Program(IDL as Idl, programId, props?.provider);
-    const ammInfo = await program.account.amm.fetch(AMM_ACCOUNT);
-    const [aMint, bMint, swapTokenA, swapTokenB] = await Promise.all([
-      getMint(connection, A_MINT),
-      getMint(connection, B_MINT),
-      getAccount(connection, new web3.PublicKey(ammInfo.tokenAAccount)),
-      getAccount(connection, new web3.PublicKey(ammInfo.tokenBAccount)),
-    ]);
-    const liquidA = Number(swapTokenA.amount) / (10 ** aMint.decimals);
-    const liquidB = Number(swapTokenB.amount) / (10 ** bMint.decimals);
-  };
 
   const onFinish = async (values: any) => {
     try {
