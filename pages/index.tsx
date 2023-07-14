@@ -1,4 +1,5 @@
 import { NextPage } from "next";
+import dynamic from 'next/dynamic';
 import styles from "../styles/Home.module.css";
 import { AppBar } from "../components/AppBar";
 import { BalanceDisplay } from "../components/BalanceDisplay";
@@ -172,4 +173,6 @@ const Home: NextPage = () => {
   );
 };
 
-export default Home;
+export default dynamic(() => Promise.resolve(Home), {
+  ssr: false,
+});;
