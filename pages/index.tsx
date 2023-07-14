@@ -66,6 +66,7 @@ const Home: NextPage = () => {
   const onCallbackExecTransaction = (hash: string)=>{
     setTxSig(hash);
     getPoolAmount();
+    getBalances();
   }
 
   const getBalances = async () => {

@@ -1,7 +1,4 @@
-import {
-  useConnection,
-  useWallet,
-} from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import * as web3 from "@solana/web3.js";
 import { FC, useState } from "react";
 import { AnchorProvider, BN, Idl, Program } from "@project-serum/anchor";
@@ -46,6 +43,7 @@ export const Swap: FC<Props> = (props) => {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const [loading, setLoading] = useState(false);
+  const [swapTo, setSwapTo] = useState("sol");
 
   const onFinish = async (values: any) => {
     try {
@@ -202,7 +200,7 @@ export const Swap: FC<Props> = (props) => {
           autoComplete="off"
         >
           <Form.Item
-            label="Amount"
+            label={`Amount (${swapTo === "sol" ? "move" : "sol"})`}
             name="amount"
             rules={[{ required: true, message: "Please input your amount!" }]}
             initialValue={"0.0002"}
@@ -219,7 +217,10 @@ export const Swap: FC<Props> = (props) => {
             rules={[{ required: true, message: "Please swap to!" }]}
             initialValue="sol"
           >
-            <Select placeholder="select asset">
+            <Select
+              placeholder="select asset"
+              onChange={(value) => setSwapTo(value)}
+            >
               <Option value="sol">Sol</Option>
               <Option value="move">Move</Option>
             </Select>
