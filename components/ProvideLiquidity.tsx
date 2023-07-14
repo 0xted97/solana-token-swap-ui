@@ -82,7 +82,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
   };
 
   const onFinish = async (values: any) => {
-    const defaultSlippage = 0.5; // Should be modify by user
+    const defaultSlippage = 0.1; // Should be modify by user
 
     const programId = new web3.PublicKey(SWAP_PROGRAM_ID);
     const program = new Program(IDL as Idl, programId, props?.provider);
