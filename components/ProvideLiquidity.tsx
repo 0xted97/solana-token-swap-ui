@@ -1,10 +1,15 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import * as web3 from "@solana/web3.js";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { FC, useEffect, useState } from "react";
-import styles from "../styles/Home.module.css";
-import { Button, Col, Form, Input, InputNumber, Row, notification } from "antd";
+import { FC, useState } from "react";
+import { Button, Col, Form, InputNumber, Row, notification } from "antd";
 import styled from "styled-components";
+import {
+  TOKEN_PROGRAM_ID,
+  createApproveInstruction,
+  createSyncNativeInstruction,
+  getAccount,
+  getMint,
+} from "@solana/spl-token";
 import { AnchorProvider, BN, Idl, Program } from "@project-serum/anchor";
 import { getOrCreateAccount, getPoolAccounts } from "../configs/utils";
 import {
@@ -17,13 +22,6 @@ import {
   userTransferAuthority,
 } from "../configs";
 import IDL from "../configs/solana_swap.json";
-import {
-  TOKEN_PROGRAM_ID,
-  createApproveInstruction,
-  createSyncNativeInstruction,
-  getAccount,
-  getMint,
-} from "@solana/spl-token";
 
 type Props = {
   provider: AnchorProvider;
@@ -32,15 +30,12 @@ type Props = {
 export const ProvideLiquidity: FC<Props> = (props) => {
   const [poolTokenAmount, setPoolTokenAmount] = useState(0);
 
+  const [loading, setLoading] = useState(false);
   const [moveEst, setMoveEst] = useState(0);
   const [solEst, setSolEst] = useState(0);
   const [form] = Form.useForm();
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
-
-  const link = (hash: string) => {
-    return `https://solscan.io/tx/${hash}?cluster=devnet`;
-  };
+  const { publicKey } = useWallet();
 
   const calculateAmountB = async (aAmount: number) => {
     const bAmount = aAmount * 0.1; // Constant Price 10A = 1B
@@ -142,7 +137,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
           solAmountInDecimal
         )
       );
-
+      setLoading(true);
       const depositTx = await program.methods
         .depositAllTokenTypes(
           new BN(poolAmountInDecimal),
@@ -166,11 +161,13 @@ export const ProvideLiquidity: FC<Props> = (props) => {
         .rpc();
       if (props.onCallback && typeof props.onCallback === "function")
         props.onCallback(depositTx);
+      setLoading(false);
     } catch (error) {
       notification.error({
         message: "Error",
         description: error?.message || "Unknown error",
       });
+      setLoading(false);
     }
   };
 

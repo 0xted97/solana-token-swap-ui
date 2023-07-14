@@ -1,11 +1,17 @@
 import {
-  useAnchorWallet,
   useConnection,
   useWallet,
 } from "@solana/wallet-adapter-react";
 import * as web3 from "@solana/web3.js";
-import { FC, useEffect, useState } from "react";
+import { FC, useState } from "react";
 import { AnchorProvider, BN, Idl, Program } from "@project-serum/anchor";
+import {
+  TOKEN_PROGRAM_ID,
+  getMint,
+  createApproveInstruction,
+  createCloseAccountInstruction,
+  createSyncNativeInstruction,
+} from "@solana/spl-token";
 import {
   Button,
   Col,
@@ -28,14 +34,6 @@ import {
   userTransferAuthority,
 } from "../configs";
 import { getOrCreateAccount, getPoolAccounts } from "../configs/utils";
-import {
-  TOKEN_PROGRAM_ID,
-  getMint,
-  createApproveInstruction,
-  createCloseAccountInstruction,
-  createSyncNativeInstruction,
-  getAccount,
-} from "@solana/spl-token";
 
 const { Option } = Select;
 
@@ -47,7 +45,7 @@ type Props = {
 export const Swap: FC<Props> = (props) => {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
-
+  const [loading, setLoading] = useState(false);
 
   const onFinish = async (values: any) => {
     try {
@@ -99,7 +97,7 @@ export const Swap: FC<Props> = (props) => {
         //   preflightCommitment: "finalized",
         // });
         // setTxInitial(initial);
-
+        setLoading(true);
         const swapTx = await program.methods
           .swap(new BN(amount), new BN(0))
           .accounts({
@@ -120,6 +118,7 @@ export const Swap: FC<Props> = (props) => {
           .rpc();
         if (props.onCallback && typeof props.onCallback === "function")
           props.onCallback(swapTx);
+        setLoading(false);
       }
       if (swapTo === "sol") {
         const transaction = new web3.Transaction();
@@ -150,7 +149,7 @@ export const Swap: FC<Props> = (props) => {
           amount
         );
         transaction.add(approveIx);
-
+        setLoading(true);
         const swapTx = await program.methods
           .swap(new BN(amount), new BN(0))
           .accounts({
@@ -178,12 +177,14 @@ export const Swap: FC<Props> = (props) => {
           .rpc();
         if (props.onCallback && typeof props.onCallback === "function")
           props.onCallback(swapTx);
+        setLoading(false);
       }
     } catch (error) {
       notification.error({
         message: "Error",
         description: error?.message,
       });
+      setLoading(false);
     }
   };
 
@@ -225,7 +226,7 @@ export const Swap: FC<Props> = (props) => {
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" loading={loading}>
               Swap
             </Button>
           </Form.Item>
