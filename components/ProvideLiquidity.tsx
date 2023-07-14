@@ -41,7 +41,6 @@ export const ProvideLiquidity: FC<Props> = (props) => {
   
 
   const calculateAmountB = async (aAmount: number) => {
-    console.log("🚀 ~ file: ProvideLiquidity.tsx:42 ~ calculateAmountB ~ aAmount:", aAmount)
     const bAmount = aAmount * 0.1; // Constant Price 10A = 1B
     const poolAccounts = await getPoolAccounts();
     const [poolMint, aMint, bMint, poolAmountA, poolAmountB] =
@@ -80,7 +79,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
   };
 
   const debouncedResults = useMemo(() => {
-    return debounce(calculateAmountB, 300);
+    return debounce(calculateAmountB, 1000);
   }, [calculateAmountB]);
 
   useEffect(() => {
@@ -124,8 +123,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
         10 ** aMint.decimals;
       const solAmountInDecimal =
         Number((solEst + defaultSlippage * solEst).toFixed(3)) *
-          10 ** bMint.decimals +
-        1e5;
+          10 ** bMint.decimals
       // Transfer Sol
       transaction.add(
         web3.SystemProgram.transfer({
