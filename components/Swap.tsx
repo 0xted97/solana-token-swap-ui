@@ -41,17 +41,12 @@ const { Option } = Select;
 
 type Props = {
   provider: AnchorProvider;
+  onCallback: (hash: string) => void;
 };
 
 export const Swap: FC<Props> = (props) => {
-  const [txSig, setTxSig] = useState("");
-  const [txInitial, setTxInitial] = useState("");
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
-
-  const link = (hash: string) => {
-    return `https://solscan.io/tx/${hash}?cluster=devnet`;
-  };
 
 
   const onFinish = async (values: any) => {
@@ -123,7 +118,8 @@ export const Swap: FC<Props> = (props) => {
           .signers([userTransferAuthority])
           .preInstructions(transaction.instructions)
           .rpc();
-        setTxSig(swapTx);
+        if (props.onCallback && typeof props.onCallback === "function")
+          props.onCallback(swapTx);
       }
       if (swapTo === "sol") {
         const transaction = new web3.Transaction();
@@ -155,11 +151,6 @@ export const Swap: FC<Props> = (props) => {
         );
         transaction.add(approveIx);
 
-        // const initial = await sendTransaction(transaction, connection, {
-        //   preflightCommitment: "finalized",
-        // });
-        // setTxInitial(initial);
-
         const swapTx = await program.methods
           .swap(new BN(amount), new BN(0))
           .accounts({
@@ -185,7 +176,8 @@ export const Swap: FC<Props> = (props) => {
             ),
           ])
           .rpc();
-        setTxSig(swapTx);
+        if (props.onCallback && typeof props.onCallback === "function")
+          props.onCallback(swapTx);
       }
     } catch (error) {
       notification.error({
@@ -238,14 +230,6 @@ export const Swap: FC<Props> = (props) => {
             </Button>
           </Form.Item>
         </ContainerForm>
-      </Col>
-      <Col offset={4} span={12}>
-        <Button type="link" href={link(txInitial)} target="_blank">
-          {txInitial}
-        </Button>
-        <Button type="link" href={link(txSig)} target="_blank">
-          {txSig}
-        </Button>
       </Col>
     </Row>
   );

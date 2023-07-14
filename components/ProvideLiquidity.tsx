@@ -27,10 +27,9 @@ import {
 
 type Props = {
   provider: AnchorProvider;
+  onCallback: (hash: string) => void;
 };
 export const ProvideLiquidity: FC<Props> = (props) => {
-  const [txSig, setTxSig] = useState("");
-  const [txInitial, setTxInitial] = useState("");
   const [poolTokenAmount, setPoolTokenAmount] = useState(0);
 
   const [moveEst, setMoveEst] = useState(0);
@@ -112,7 +111,8 @@ export const ProvideLiquidity: FC<Props> = (props) => {
       const poolAmountInDecimal =
         Number(poolTokenAmount.toFixed(3)) * 10 ** poolMint.decimals;
       const moveAmountInDecimal =
-        Number((moveEst + defaultSlippage * moveEst).toFixed(3)) * 10 ** aMint.decimals;
+        Number((moveEst + defaultSlippage * moveEst).toFixed(3)) *
+        10 ** aMint.decimals;
       const solAmountInDecimal =
         Number((solEst + defaultSlippage * solEst).toFixed(3)) *
           10 ** bMint.decimals +
@@ -164,7 +164,8 @@ export const ProvideLiquidity: FC<Props> = (props) => {
         .signers([userTransferAuthority])
         .preInstructions(transaction.instructions)
         .rpc();
-      setTxSig(depositTx);
+      if (props.onCallback && typeof props.onCallback === "function")
+        props.onCallback(depositTx);
     } catch (error) {
       notification.error({
         message: "Error",
@@ -215,14 +216,6 @@ export const ProvideLiquidity: FC<Props> = (props) => {
             </Button>
           </Form.Item>
         </ContainerForm>
-      </Col>
-      <Col offset={4} span={12}>
-        <Button type="link" href={link(txInitial)} target="_blank">
-          {txInitial}
-        </Button>
-        <Button type="link" href={link(txSig)} target="_blank">
-          {txSig}
-        </Button>
       </Col>
     </Row>
   );

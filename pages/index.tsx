@@ -5,7 +5,7 @@ import { BalanceDisplay } from "../components/BalanceDisplay";
 import { ProvideLiquidity } from "../components/ProvideLiquidity";
 import { Swap } from "../components/Swap";
 import Head from "next/head";
-import { Col, Row, Tabs, Typography } from "antd";
+import { Button, Col, Row, Tabs, Typography } from "antd";
 import type { TabsProps } from "antd";
 import { useEffect, useState } from "react";
 import {
@@ -20,41 +20,90 @@ import {
   setProvider,
   web3,
 } from "@project-serum/anchor";
-import { AMM_ACCOUNT, A_MINT, B_MINT, SWAP_PROGRAM_ID } from "../configs";
+import {
+  AMM_ACCOUNT,
+  A_MINT,
+  B_MINT,
+  SWAP_PROGRAM_ID,
+} from "../configs";
 import IDL from "../configs/solana_swap.json";
-import { getAccount, getMint } from "@solana/spl-token";
+import {
+  Mint,
+  getAccount,
+  getAssociatedTokenAddressSync,
+  getMint,
+} from "@solana/spl-token";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
-const Home: NextPage = (props) => {
+const Home: NextPage = () => {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const wallet = useAnchorWallet();
   const provider = new AnchorProvider(connection, wallet, {});
 
+  const [tab, setTab] = useState("1");
+  const [balance, setBalance] = useState(0);
+  const [balanceToken, setBalanceToken] = useState(0);
   const [liquidA, setLiquidA] = useState(0);
   const [liquidB, setLiquidB] = useState(0);
+  const [txSig, setTxSig] = useState("");
   setProvider(provider);
 
   const items: TabsProps["items"] = [
     {
       key: "1",
       label: `Provide liquidity`,
-      children: <ProvideLiquidity provider={provider} />,
+      children: (
+        <ProvideLiquidity
+          provider={provider}
+          onCallback={(hash) => {
+            setTxSig(hash);
+          }}
+        />
+      ),
     },
     {
       key: "2",
       label: `Swap`,
-      children: <Swap provider={provider} />,
+      children: (
+        <Swap
+          provider={provider}
+          onCallback={(hash) => {
+            setTxSig(hash);
+          }}
+        />
+      ),
     },
   ];
 
-  const [tab, setTab] = useState("1");
+  const link = (hash: string) => {
+    return `https://solscan.io/tx/${hash}?cluster=devnet`;
+  };
+
   const onChangeTab = (key: string) => {
     setTab(key);
   };
 
   useEffect(() => {
     getPoolAmount();
+    getBalances();
   }, []);
+
+  const getBalances = async () => {
+    try {
+      const account = getAssociatedTokenAddressSync(A_MINT, publicKey);
+      const mint = await getMint(connection, A_MINT);
+      const { amount } = await getAccount(connection, account);
+      setBalanceToken(Number(amount) / 10 ** mint.decimals);
+
+      connection.getAccountInfo(publicKey).then((info) => {
+        setBalance((info?.lamports || 0) / LAMPORTS_PER_SOL);
+      });
+    } catch (error) {
+      setBalanceToken(0);
+      setBalance(0);
+    }
+  };
 
   const getPoolAmount = async () => {
     try {
@@ -87,7 +136,7 @@ const Home: NextPage = (props) => {
       {publicKey && (
         <Row gutter={16}>
           <Col span={24} className={styles.AppBody}>
-            <BalanceDisplay />
+            <BalanceDisplay balance={balance} balanceToken={balanceToken}/>
             <h4>Liquid Move: {liquidA}</h4>
             <h4>Liquid SOL: {liquidB}</h4>
           </Col>
@@ -103,6 +152,11 @@ const Home: NextPage = (props) => {
               items={items}
               onChange={onChangeTab}
             />
+          </Col>
+          <Col offset={6} span={12}>
+            <Button type="link" href={link(txSig)} target="_blank">
+              {txSig}
+            </Button>
           </Col>
         </Row>
       )}
