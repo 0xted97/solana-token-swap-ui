@@ -81,7 +81,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
 
   const debouncedResults = useMemo(() => {
     return debounce(calculateAmountB, 300);
-  }, []);
+  }, [calculateAmountB]);
 
   useEffect(() => {
     return () => {

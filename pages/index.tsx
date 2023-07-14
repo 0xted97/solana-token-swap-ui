@@ -59,11 +59,6 @@ const Home: NextPage = () => {
     setTab(key);
   };
 
-  useEffect(() => {
-    getPoolAmount();
-    getBalances();
-  }, [connection, publicKey]);
-
   const onCallbackExecTransaction = (hash: string)=>{
     setTxSig(hash);
     getPoolAmount();
@@ -106,6 +101,11 @@ const Home: NextPage = () => {
       setLiquidB(0);
     }
   };
+
+  useEffect(() => {
+    getPoolAmount();
+    getBalances();
+  }, [connection, publicKey, getBalances, getPoolAmount]);
 
   const items: TabsProps["items"] = [
     {
