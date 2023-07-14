@@ -100,10 +100,10 @@ export const Swap: FC<Props> = (props) => {
         );
         transaction.add(approveIx);
 
-        const initial = await sendTransaction(transaction, connection, {
-          preflightCommitment: "finalized",
-        });
-        setTxInitial(initial);
+        // const initial = await sendTransaction(transaction, connection, {
+        //   preflightCommitment: "finalized",
+        // });
+        // setTxInitial(initial);
 
         const swapTx = await program.methods
           .swap(new BN(amount), new BN(0))
@@ -121,6 +121,7 @@ export const Swap: FC<Props> = (props) => {
             hostFeeAccount: web3.PublicKey.default,
           })
           .signers([userTransferAuthority])
+          .preInstructions(transaction.instructions)
           .rpc();
         setTxSig(swapTx);
       }
@@ -154,10 +155,10 @@ export const Swap: FC<Props> = (props) => {
         );
         transaction.add(approveIx);
 
-        const initial = await sendTransaction(transaction, connection, {
-          preflightCommitment: "finalized",
-        });
-        setTxInitial(initial);
+        // const initial = await sendTransaction(transaction, connection, {
+        //   preflightCommitment: "finalized",
+        // });
+        // setTxInitial(initial);
 
         const swapTx = await program.methods
           .swap(new BN(amount), new BN(0))
@@ -175,6 +176,7 @@ export const Swap: FC<Props> = (props) => {
             hostFeeAccount: web3.PublicKey.default,
           })
           .signers([userTransferAuthority])
+          .preInstructions(transaction.instructions)
           .postInstructions([
             createCloseAccountInstruction(
               userBAccounts[0],
