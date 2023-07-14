@@ -1,8 +1,9 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import * as web3 from "@solana/web3.js";
-import { FC, useState } from "react";
+import { FC, useEffect, useMemo, useState } from "react";
 import { Button, Col, Form, InputNumber, Row, notification } from "antd";
 import styled from "styled-components";
+import { debounce } from "lodash";
 import {
   TOKEN_PROGRAM_ID,
   createApproveInstruction,
@@ -37,7 +38,10 @@ export const ProvideLiquidity: FC<Props> = (props) => {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
 
+  
+
   const calculateAmountB = async (aAmount: number) => {
+    console.log("🚀 ~ file: ProvideLiquidity.tsx:42 ~ calculateAmountB ~ aAmount:", aAmount)
     const bAmount = aAmount * 0.1; // Constant Price 10A = 1B
     const poolAccounts = await getPoolAccounts();
     const [poolMint, aMint, bMint, poolAmountA, poolAmountB] =
@@ -74,6 +78,16 @@ export const ProvideLiquidity: FC<Props> = (props) => {
     setSolEst(bAmount);
     setPoolTokenAmount(lpTokenAmount);
   };
+
+  const debouncedResults = useMemo(() => {
+    return debounce(calculateAmountB, 300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      debouncedResults.cancel();
+    };
+  });
 
   const onFinish = async (values: any) => {
     const defaultSlippage = 0.1; // Should be modify by user
@@ -195,7 +209,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
               style={{ width: "100%" }}
               placeholder="Please input amount Move"
               onChange={(value) => {
-                calculateAmountB(Number(value));
+                debouncedResults(Number(value))
               }}
             />
           </Form.Item>
@@ -208,7 +222,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
             />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" loading={loading}>
               Add Liquid
             </Button>
           </Form.Item>
