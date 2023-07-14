@@ -44,10 +44,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
   };
 
   const calculateAmountB = async (aAmount: number) => {
-    console.log(
-      "🚀 ~ file: ProvideLiquidity.tsx:48 ~ calculateAmountB ~ aAmount:",
-      aAmount
-    );
+    const bAmount = aAmount * 0.1; // Constant Price 10A = 1B
     const poolAccounts = await getPoolAccounts();
     const [poolMint, aMint, bMint, poolAmountA, poolAmountB] =
       await Promise.all([
@@ -63,20 +60,30 @@ export const ProvideLiquidity: FC<Props> = (props) => {
           new web3.PublicKey(poolAccounts.tokenBAccountAddress)
         ),
       ]);
-    const liquidAInNumber = Number(poolAmountA.amount) / 10 ** aMint.decimals;
-    const liquidBInNumber = Number(poolAmountB.amount) / 10 ** bMint.decimals;
-    const supplyInNumber = Number(poolMint.supply) / 10 ** poolMint.decimals;
-    const moveInNumber = Number(aAmount);
-    const poolAmount = (moveInNumber * supplyInNumber) / liquidAInNumber;
+    const poolReserveTokenA = Number(poolAmountA.amount) / 10 ** aMint.decimals;
+    const poolReserveTokenB = Number(poolAmountB.amount) / 10 ** bMint.decimals;
+    const totalSupplyLPTokens =
+      Number(poolMint.supply) / 10 ** poolMint.decimals;
 
-    const solAmount = (liquidBInNumber * poolAmount) / supplyInNumber;
+    const liquidityRatioTokenA = aAmount / poolReserveTokenA;
+    const liquidityRatioTokenB = bAmount / poolReserveTokenB;
 
-    form.setFieldValue("sol", solAmount);
-    setSolEst(solAmount);
-    setPoolTokenAmount(poolAmount);
+    const liquidityRatio = Math.min(liquidityRatioTokenA, liquidityRatioTokenB);
+    // Calculate the amount of LP tokens to be minted for the user
+    const lpTokenAmount = liquidityRatio * totalSupplyLPTokens;
+
+    form.setFieldsValue({
+      sol: bAmount,
+    });
+
+    setMoveEst(aAmount);
+    setSolEst(bAmount);
+    setPoolTokenAmount(lpTokenAmount);
   };
 
   const onFinish = async (values: any) => {
+    const defaultSlippage = 0.5; // Should be modify by user
+
     const programId = new web3.PublicKey(SWAP_PROGRAM_ID);
     const program = new Program(IDL as Idl, programId, props?.provider);
     const poolAccounts = await getPoolAccounts();
@@ -102,15 +109,20 @@ export const ProvideLiquidity: FC<Props> = (props) => {
       const bMint = await getMint(connection, B_MINT);
       const poolMint = await getMint(connection, POOL_MINT);
 
-      const poolAmount = Number(poolTokenAmount);
-      const moveAmount = Number(moveEst.toFixed(3));
-      const solAmount = Number(solEst.toFixed(3));
+      const poolAmountInDecimal =
+        Number(poolTokenAmount.toFixed(3)) * 10 ** poolMint.decimals;
+      const moveAmountInDecimal =
+        Number((moveEst + defaultSlippage * moveEst).toFixed(3)) * 10 ** aMint.decimals;
+      const solAmountInDecimal =
+        Number((solEst + defaultSlippage * solEst).toFixed(3)) *
+          10 ** bMint.decimals +
+        1e5;
       // Transfer Sol
       transaction.add(
         web3.SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: userBAccounts[0],
-          lamports: solAmount * 1e5,
+          lamports: solAmountInDecimal,
         }),
         createSyncNativeInstruction(userBAccounts[0])
       );
@@ -121,26 +133,21 @@ export const ProvideLiquidity: FC<Props> = (props) => {
           userAAccounts[0],
           userTransferAuthority.publicKey,
           publicKey,
-          moveAmount
+          moveAmountInDecimal
         ),
         createApproveInstruction(
           userBAccounts[0],
           userTransferAuthority.publicKey,
           publicKey,
-          solAmount * 1e5
+          solAmountInDecimal
         )
       );
 
-      const initial = await sendTransaction(transaction, connection, {
-        preflightCommitment: "finalized",
-      });
-      setTxInitial(initial);
-
       const depositTx = await program.methods
         .depositAllTokenTypes(
-          new BN(poolAmount),
-          new BN(moveEst),
-          new BN(solEst * 1e5)
+          new BN(poolAmountInDecimal),
+          new BN(moveAmountInDecimal),
+          new BN(solAmountInDecimal)
         )
         .accounts({
           amm: AMM_ACCOUNT,
@@ -155,6 +162,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([userTransferAuthority])
+        .preInstructions(transaction.instructions)
         .rpc();
       setTxSig(depositTx);
     } catch (error) {
@@ -172,6 +180,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
       </Col>
       <Col offset={6} span={12}>
         <ContainerForm
+          form={form}
           layout="vertical"
           name="basic"
           style={{ maxWidth: 600 }}
@@ -180,6 +189,7 @@ export const ProvideLiquidity: FC<Props> = (props) => {
         >
           <Form.Item
             label="Amount Move"
+            name="move"
             rules={[{ required: true, message: "Please input amount Move!" }]}
           >
             <InputNumber
@@ -192,14 +202,9 @@ export const ProvideLiquidity: FC<Props> = (props) => {
             />
           </Form.Item>
 
-          <Form.Item
-            label="Amount SOL"
-            rules={[{ required: true, message: "Please input your amount!" }]}
-          >
+          <Form.Item label="Amount SOL" name="sol">
             <InputNumber
-              name="sol"
               style={{ width: "100%", color: "#FFF" }}
-              placeholder="Please input amount SOL"
               value={solEst}
               disabled
             />

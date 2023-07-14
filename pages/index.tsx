@@ -35,11 +35,11 @@ const Home: NextPage = (props) => {
   setProvider(provider);
 
   const items: TabsProps["items"] = [
-    // {
-    //   key: "1",
-    //   label: `Provide liquidity`,
-    //   children: <ProvideLiquidity provider={provider} />,
-    // },
+    {
+      key: "1",
+      label: `Provide liquidity`,
+      children: <ProvideLiquidity provider={provider} />,
+    },
     {
       key: "2",
       label: `Swap`,
