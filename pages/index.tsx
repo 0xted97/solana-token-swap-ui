@@ -49,32 +49,6 @@ const Home: NextPage = () => {
   const [txSig, setTxSig] = useState("");
   setProvider(provider);
 
-  const items: TabsProps["items"] = [
-    {
-      key: "1",
-      label: `Provide liquidity`,
-      children: (
-        <ProvideLiquidity
-          provider={provider}
-          onCallback={(hash) => {
-            setTxSig(hash);
-          }}
-        />
-      ),
-    },
-    {
-      key: "2",
-      label: `Swap`,
-      children: (
-        <Swap
-          provider={provider}
-          onCallback={(hash) => {
-            setTxSig(hash);
-          }}
-        />
-      ),
-    },
-  ];
 
   const link = (hash: string) => {
     return `https://solscan.io/tx/${hash}?cluster=devnet`;
@@ -87,7 +61,12 @@ const Home: NextPage = () => {
   useEffect(() => {
     getPoolAmount();
     getBalances();
-  }, []);
+  }, [connection, publicKey]);
+
+  const onCallbackExecTransaction = (hash: string)=>{
+    setTxSig(hash);
+    getPoolAmount();
+  }
 
   const getBalances = async () => {
     try {
@@ -125,6 +104,29 @@ const Home: NextPage = () => {
       setLiquidB(0);
     }
   };
+
+  const items: TabsProps["items"] = [
+    {
+      key: "1",
+      label: `Provide liquidity`,
+      children: (
+        <ProvideLiquidity
+          provider={provider}
+          onCallback={onCallbackExecTransaction}
+        />
+      ),
+    },
+    {
+      key: "2",
+      label: `Swap`,
+      children: (
+        <Swap
+          provider={provider}
+          onCallback={onCallbackExecTransaction}
+        />
+      ),
+    },
+  ];
 
   return (
     <div className={styles.App}>

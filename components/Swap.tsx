@@ -46,7 +46,7 @@ type Props = {
 
 export const Swap: FC<Props> = (props) => {
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey } = useWallet();
 
 
   const onFinish = async (values: any) => {
