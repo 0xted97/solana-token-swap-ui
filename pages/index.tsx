@@ -1,5 +1,5 @@
 import { NextPage } from "next";
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
 import styles from "../styles/Home.module.css";
 import { AppBar } from "../components/AppBar";
 import { BalanceDisplay } from "../components/BalanceDisplay";
@@ -21,12 +21,7 @@ import {
   setProvider,
   web3,
 } from "@project-serum/anchor";
-import {
-  AMM_ACCOUNT,
-  A_MINT,
-  B_MINT,
-  SWAP_PROGRAM_ID,
-} from "../configs";
+import { AMM_ACCOUNT, A_MINT, B_MINT, SWAP_PROGRAM_ID } from "../configs";
 import IDL from "../configs/solana_swap.json";
 import {
   Mint,
@@ -50,7 +45,6 @@ const Home: NextPage = () => {
   const [txSig, setTxSig] = useState("");
   setProvider(provider);
 
-
   const link = (hash: string) => {
     return `https://solscan.io/tx/${hash}?cluster=devnet`;
   };
@@ -59,26 +53,37 @@ const Home: NextPage = () => {
     setTab(key);
   };
 
-  const onCallbackExecTransaction = (hash: string)=>{
+  const onCallbackExecTransaction = (hash: string) => {
     setTxSig(hash);
     getPoolAmount();
     getBalances();
-  }
+  };
 
-  const getBalances = async () => {
+  const getBalanceToken = async () => {
     try {
       const account = getAssociatedTokenAddressSync(A_MINT, publicKey);
       const mint = await getMint(connection, A_MINT);
       const { amount } = await getAccount(connection, account);
       setBalanceToken(Number(amount) / 10 ** mint.decimals);
-
-      connection.getAccountInfo(publicKey).then((info) => {
-        setBalance((info?.lamports || 0) / LAMPORTS_PER_SOL);
-      });
     } catch (error) {
+      console.log("🚀 ~ file: index.tsx:69 ~ getBalanceToken ~ error:", error)
       setBalanceToken(0);
+    }
+  };
+
+  const getBalanceSol = async () => {
+    try {
+      const info = await connection.getAccountInfo(publicKey);
+      setBalance((info?.lamports || 0) / LAMPORTS_PER_SOL);
+    } catch (error) {
+      console.log("🚀 ~ file: index.tsx:78 ~ getBalanceSol ~ error:", error)
       setBalance(0);
     }
+  };
+
+  const getBalances = async () => {
+    getBalanceSol();
+    getBalanceToken();
   };
 
   const getPoolAmount = async () => {
@@ -105,7 +110,7 @@ const Home: NextPage = () => {
   useEffect(() => {
     getPoolAmount();
     getBalances();
-  }, [connection, publicKey, getBalances, getPoolAmount]);
+  }, [connection, publicKey]);
 
   const items: TabsProps["items"] = [
     {
@@ -122,10 +127,7 @@ const Home: NextPage = () => {
       key: "2",
       label: `Swap`,
       children: (
-        <Swap
-          provider={provider}
-          onCallback={onCallbackExecTransaction}
-        />
+        <Swap provider={provider} onCallback={onCallbackExecTransaction} />
       ),
     },
   ];
@@ -140,7 +142,7 @@ const Home: NextPage = () => {
       {publicKey && (
         <Row gutter={16}>
           <Col span={24} className={styles.AppBody}>
-            <BalanceDisplay balance={balance} balanceToken={balanceToken}/>
+            <BalanceDisplay balance={balance} balanceToken={balanceToken} />
             <h4>Liquid Move: {liquidA}</h4>
             <h4>Liquid SOL: {liquidB}</h4>
           </Col>
@@ -175,4 +177,4 @@ const Home: NextPage = () => {
 
 export default dynamic(() => Promise.resolve(Home), {
   ssr: false,
-});;
+});
